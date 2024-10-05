@@ -9,8 +9,7 @@ let bodyParser = require('body-parser');
 mongoose.connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true });
 
 const siteSchema = new mongoose.Schema({
-  url: { type: String, required: true, unique: true },
-  index: { type: Number, required: true, min: 0, unique: true }
+  url: { type: String, required: true, unique: true }
 });
 let Site = mongoose.model('Site', siteSchema);
 
@@ -32,6 +31,8 @@ app.get('/api/hello', function(req, res) {
   res.json({ greeting: 'hello API' });
 });
 
+//console.log("starting");
+
 // need MongoDB...
 
 /*
@@ -44,37 +45,56 @@ app.post("/api/shorturl", (req, res) => {
   const regexURL = /https?:\/\//;
   const wrkURL = url.replace(regexURL, "");
 
-  console.log(`${url} => ${wrkURL}`);
+//  console.log(`${url} regexed into ${wrkURL}` + "\n");
 //  console.log(req);
 //  console.log(res);
 
   if (regexURL.test(url)) {
-    dns.lookup(wrkURL, (err) => {
-      console.log(err);
-      if (err) {
-        res.json({error:	"Invalid URL"});
-      } else {
-        let wrkSite = Site.findOne({url: wrkURL});
+    dns.lookup(wrkURL, (err) =>
+    {
+//      console.log("checking site");
+      if (err)
+      {
+//        console.log(`No such site: ${err}` + "\n");
+        res.json({error:	"Invalid URL"} + "\n");
+      } else
+      {
+        let wrkSite = Site.findOne({url: wrkURL})
+        .then((doc) =>
+        {
+          if (doc)
+          {
+            console.log(`Found: ${doc}` + "\n");
+            res.json({original_url: wrkURL, short_url: doc._id});
+          }
+          else
+          {
+//            console.log(`Creating ${wrkSite} in dB` + "\n");
 
-        console.log(wrkSite);
-        
-        if (wrkSite) {
-//          return res.status(400).send('User already exists.');
-        } else {
-          let idxSite = Site.sort({index: -1}).limit(1).select("index").exec(function(err, data) {
-            if (err) {
-              return done(err);
-            } else {
-              done(null, data);
-            }
-          });
-          console.log(idxSite);
-//          let new_idx = idxSite.index + 1;
-//          wrkSite = new Site({wrkURL, new_idx);
-//          Site.save();
-          // create new entry
-//          res.json(original_url: wrkURL, short_url: new_idx);;
-        }
+            let newSite = new Site({
+              url: wrkURL
+            });
+
+//            console.log(newSite);
+//            console.log(newSite._id.toString());
+
+            newSite
+              .save()
+              .then((doc) =>
+              {
+//                console.log(doc);
+                res.json({original_url: wrkURL, short_url: newSite._id.toString()});
+              })
+              .catch((err) =>
+              {
+                console.error(err);
+              });
+          }
+        })
+        .catch((err) =>
+        {
+          console.error(err);
+        });
       }
     });
   } else {
@@ -89,23 +109,20 @@ app.get("/api/shorturl/:idx", (req, res) => {
   //console.log(req.params);
   const {idx} = req.params;
 
-//  console.log(Number(idx));
-
-  if (!isNaN(Number(idx))) {
-    // find idx on the dB then redirect
-    let idxSite = Site.findOne({index: idx});
-
-  //  console.log(idxSite.index);
-    
-    if (idxSite.index == undefined) {
+  let idxSite = Site.findById({_id: idx})
+  .then ((doc) =>
+  {
+    if (doc) {
+      res.redirect(`https://${idxSite.url}`);
+    } else {
       //console.log("no site here");
       res.json({error: "No short URL found for the given input"});
-    } else {
-      res.redirect(`https://${idxSite.url}`);
     }
-  } else {
-    res.json({error:	"Wrong format"});
-  }
+  })
+  .catch ((err) =>
+  {
+    console.error(err);
+  })
 });
 
 
