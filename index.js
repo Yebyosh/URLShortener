@@ -64,7 +64,7 @@ app.post("/api/shorturl", (req, res) => {
         {
           if (doc)
           {
-            console.log(`Found: ${doc}` + "\n");
+//            console.log(`Found: ${doc}` + "\n");
             res.json({original_url: wrkURL, short_url: doc._id});
           }
           else
