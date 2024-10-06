@@ -32,7 +32,7 @@ app.get('/api/hello', function(req, res) {
   res.json({ greeting: 'hello API' });
 });
 
-console.log("starting");
+//console.log("starting");
 
 // need MongoDB...
 
@@ -50,14 +50,16 @@ app.post("/api/shorturl", (req, res) => {
 //  console.log(req);
 //  console.log(res);
 
+  // NB: the dns checks only work with domain (primary website), no paths (sub pages)
+  //     so trim off the post domain path
   if (regexURL.test(url)) {
-    lookup(wrkURL, {}, (err, address, family) =>
+    lookup(wrkURL.split("/")[0], {}, (err, address, family) =>
 //    dns.lookup(wrkURL, (err) =>
     {
-//      console.log("checking site");
+      console.log("checking site");
       if (err)
       {
-//        console.log(`No such site: ${err}` + "\n");
+//        console.log(`Site is inoperable: ${err}` + "\n");
         res.json({error: "Invalid URL"} + "\n");
       } else
       {
@@ -108,7 +110,7 @@ app.post("/api/shorturl", (req, res) => {
 3. When you visit /api/shorturl/<short_url>, you will be redirected to the original URL.
 */
 app.get("/api/shorturl/:idx", (req, res) => {
-  //console.log(req.params);
+  console.log(req.params);
   const {idx} = req.params;
 
   let idxSite = Site.findById({_id: idx})
@@ -124,7 +126,7 @@ app.get("/api/shorturl/:idx", (req, res) => {
   .catch ((err) =>
   {
     console.error(err);
-    console.log("dis here invalid id");
+//    console.log("dis here invalid id");
     res.json({error:	"Wrong format"});
   })
 
