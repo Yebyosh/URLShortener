@@ -3,7 +3,8 @@ const mongoose = require('mongoose');
 const express = require('express');
 const cors = require('cors');
 const app = express();
-const dns = require('node:dns');
+//const dns = require('node:dns');
+const {lookup} = require('dns-lookup-cache');
 let bodyParser = require('body-parser');
 
 mongoose.connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true });
@@ -31,7 +32,7 @@ app.get('/api/hello', function(req, res) {
   res.json({ greeting: 'hello API' });
 });
 
-//console.log("starting");
+console.log("starting");
 
 // need MongoDB...
 
@@ -50,13 +51,14 @@ app.post("/api/shorturl", (req, res) => {
 //  console.log(res);
 
   if (regexURL.test(url)) {
-    dns.lookup(wrkURL, (err) =>
+    lookup(wrkURL, {}, (err, address, family) =>
+//    dns.lookup(wrkURL, (err) =>
     {
 //      console.log("checking site");
       if (err)
       {
 //        console.log(`No such site: ${err}` + "\n");
-        res.json({error:	"Invalid URL"} + "\n");
+        res.json({error: "Invalid URL"} + "\n");
       } else
       {
         let wrkSite = Site.findOne({url: wrkURL})
@@ -82,7 +84,7 @@ app.post("/api/shorturl", (req, res) => {
               .save()
               .then((doc) =>
               {
-//                console.log(doc);
+                console.log(doc);
                 res.json({original_url: wrkURL, short_url: newSite._id.toString()});
               })
               .catch((err) =>
@@ -98,7 +100,7 @@ app.post("/api/shorturl", (req, res) => {
       }
     });
   } else {
-    res.json({error:	"Invalid URL"});
+    res.json({error: "Invalid URL"});
   }
 });
 
@@ -122,7 +124,29 @@ app.get("/api/shorturl/:idx", (req, res) => {
   .catch ((err) =>
   {
     console.error(err);
+    console.log("dis here invalid id");
+    res.json({error:	"Wrong format"});
   })
+
+/*
+//  console.log(Number(idx));
+
+  if (!isNaN(Number(idx))) {
+    // find idx on the dB then redirect
+    let idxSite = Site.findOne({index: idx});
+
+  //  console.log(idxSite.index);
+    
+    if (idxSite.index == undefined) {
+      //console.log("no site here");
+      res.json({error: "No short URL found for the given input"});
+    } else {
+      res.redirect(`https://${idxSite.url}`);
+    }
+  } else {
+    res.json({error:	"Wrong format"});
+  }
+*/
 });
 
 
