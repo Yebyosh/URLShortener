@@ -3,14 +3,15 @@ const mongoose = require('mongoose');
 const express = require('express');
 const cors = require('cors');
 const app = express();
-//const dns = require('node:dns');
 const {lookup} = require('dns-lookup-cache');
 let bodyParser = require('body-parser');
+const regexIdx = /\d/g;
 
 mongoose.connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true });
 
 const siteSchema = new mongoose.Schema({
-  url: { type: String, required: true, unique: true }
+  url: { type: String, required: true, unique: true },
+  index: { type: Number, required: true, min: 0, unique: true }
 });
 let Site = mongoose.model('Site', siteSchema);
 
@@ -32,7 +33,7 @@ app.get('/api/hello', function(req, res) {
   res.json({ greeting: 'hello API' });
 });
 
-//console.log("starting");
+console.log("starting");
 
 // need MongoDB...
 
@@ -46,62 +47,108 @@ app.post("/api/shorturl", (req, res) => {
   const regexURL = /https?:\/\//;
   const wrkURL = url.replace(regexURL, "");
 
-//  console.log(`${url} regexed into ${wrkURL}` + "\n");
+  console.log(`${url} regexed into ${wrkURL}` + "\n");
 //  console.log(req);
 //  console.log(res);
 
   // NB: the dns checks only work with domain (primary website), no paths (sub pages)
   //     so trim off the post domain path
-  if (regexURL.test(url)) {
+  if (regexURL.test(url))
+  {
     lookup(wrkURL.split("/")[0], {}, (err, address, family) =>
-//    dns.lookup(wrkURL, (err) =>
     {
       console.log("checking site");
       if (err)
       {
-//        console.log(`Site is inoperable: ${err}` + "\n");
+        console.log(`Site is inoperable: ${err}` + "\n");
         res.json({error: "Invalid URL"} + "\n");
       } else
       {
-        let wrkSite = Site.findOne({url: wrkURL})
-        .then((doc) =>
+        // callback hell
+        Site.findOne({url: wrkURL})
+        .then ((result1) =>
         {
-          if (doc)
+          console.log(`first find: ${result1}`);
+          Site.countDocuments()
+          .then ((count) =>
           {
-//            console.log(`Found: ${doc}` + "\n");
-            res.json({original_url: wrkURL, short_url: doc._id});
-          }
-          else
-          {
-//            console.log(`Creating ${wrkSite} in dB` + "\n");
+            console.log(count);
+            if( count == 0)
+            {
+              console.log("No Found Records.");
 
-            let newSite = new Site({
-              url: wrkURL
-            });
+              let newSite = new Site({
+                url: wrkURL,
+                index: count
+              });
 
-//            console.log(newSite);
-//            console.log(newSite._id.toString());
-
-            newSite
+              newSite
               .save()
               .then((doc) =>
               {
                 console.log(doc);
-                res.json({original_url: wrkURL, short_url: newSite._id.toString()});
+                res.json({original_url: wrkURL, short_url: count});
               })
               .catch((err) =>
               {
                 console.error(err);
-              });
-          }
+              })
+            } else
+            {
+              console.log("Found Records : " + count);
+              Site.find({}).sort({"index": -1}).limit(1)
+              .then ((result2) =>
+              {
+                console.log(`first find: ${result1}, second find: ${result2}`);
+
+                if (result1)
+                {
+                  console.log(`Found: ${result1}` + "\n");
+                  res.json({ original_url: `https://${wrkURL}`, short_url: result1.index});
+                }
+                else
+                {
+                  // FCC really want the numeral only index for shortURL
+                  // _id from the MongoDB used for shortURL will not pass test 2
+                  // though will execute for test 3
+                  console.log(`Creating entry in dB w ${result2}` + "\n");
+
+                  const siteIdx = result2[0].index + 1;
+                  console.log(`Highest index on dB: ${result2[0].index}, saving as ${siteIdx}`);
+
+                  let newSite = new Site({
+                    url: wrkURL,
+                    index: siteIdx
+                  });
+                  console.log(`saving ${newSite}`);
+                  newSite
+                  .save()
+                  .then((doc) =>
+                  {
+                    console.log(doc);
+                    res.json({original_url: `https://${wrkURL}`, short_url: siteIdx});
+                  })
+                  .catch((err) =>
+                  {
+                    console.error(err);
+                  })
+                }
+              })
+            }
+          })
+          .catch ((err) =>
+          {
+            console.error(err);
+          })
         })
-        .catch((err) =>
+        .catch ((err) =>
         {
           console.error(err);
-        });
+        })
       }
-    });
-  } else {
+    })
+  } else
+  {
     res.json({error: "Invalid URL"});
   }
 });
@@ -113,42 +160,26 @@ app.get("/api/shorturl/:idx", (req, res) => {
   console.log(req.params);
   const {idx} = req.params;
 
-  let idxSite = Site.findById({_id: idx})
-  .then ((doc) =>
-  {
-    if (doc) {
-      res.redirect(`https://${idxSite.url}`);
-    } else {
-      //console.log("no site here");
-      res.json({error: "No short URL found for the given input"});
-    }
-  })
-  .catch ((err) =>
-  {
-    console.error(err);
-//    console.log("dis here invalid id");
-    res.json({error:	"Wrong format"});
-  })
-
-/*
-//  console.log(Number(idx));
-
-  if (!isNaN(Number(idx))) {
+  if (regexIdx.test(idx)) {
     // find idx on the dB then redirect
-    let idxSite = Site.findOne({index: idx});
-
-  //  console.log(idxSite.index);
-    
-    if (idxSite.index == undefined) {
-      //console.log("no site here");
-      res.json({error: "No short URL found for the given input"});
-    } else {
-      res.redirect(`https://${idxSite.url}`);
-    }
+    Site.findOne({index: idx})
+    .then ((data) =>
+    {
+      if (data) {
+        console.log("redirecting\n")
+        res.redirect(`https://${data.url}`);
+      } else {
+        console.log("no site here\n");
+        res.json({error: "No short URL found for the given input"});
+      }
+    })
+    .catch ((err) =>
+    {
+      console.error(err);
+    })
   } else {
     res.json({error:	"Wrong format"});
   }
-*/
 });
 
 
